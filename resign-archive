@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+
+
+ARCHIVE_FOLDER=$1
+echo ARCHIVE_FOLDER $ARCHIVE_FOLDER
+PROVISION_PROFILE=$2
+echo PROVISION_PROFILE $PROVISION_PROFILE
+SIGNATURE=$3
+echo SIGNATURE $SIGNATURE
+CERTIFICATE_NAME=$4
+echo CERTIFICATE_NAME $CERTIFICATE_NAME
+
+function clean_up {
+
+# Perform program exit housekeeping
+# Optionally accepts an exit status
+echo cleanup
+#echo "tempfile $TEMP_FILE"
+#echo "$build_log"
+#    cat "$TEMP_FILE" >> "$build_log"
+#        rm -f "$TEMP_FILE"
+            if (( "${1:-0}" > 0 ));then
+                         echo "failed build on step $1"
+                             else
+                                          echo "build succeeded"
+                                              fi  
+                                                  exit $1
+}
+
+function error_exit {
+
+# Display error message and exit
+    echo exit step $1
+    clean_up $1
+}
+
+trap clean_up SIGHUP SIGINT SIGTERM
+
+APP_FOLDER=$(find "$ARCHIVE_FOLDER" -iname "*.app")
+if [ $? -ne 0 ];then
+    error_exit 1 
+    fi
+NEW_PROVISION_PROFILE="$APP_FOLDER/embedded.mobileprovision"
+XCENT="$APP_FOLDER/archived-expanded-entitlements.xcent"
+CODE_SIGNATURE_FOLDER="$APP_FOLDER/_CodeSignature"
+RESOURCES_PLIST="$APP_FOLDER/ResourceRules.plist"
+
+
+
+
+
+echo APP_FOLDER $APP_FOLDER
+PROFILE_GREP=$(grep -a -A1 'application-identifier' "$PROVISION_PROFILE")
+if [ $? -ne 0 ];then
+    error_exit 2
+    fi
+echo PROFILE_GREP "$PROFILE_GREP"
+BUNDLE_IDENTIFIER=$(ruby -e "puts /<string>(.*)<\/string>/.match(\"$PROFILE_GREP)\")[1]") 
+if [ $? -ne 0 ];then
+    error_exit 3
+    fi
+KEYCHAIN_IDENTIFIER="$(echo $BUNDLE_IDENTIFIER | cut -d '.' -f1)"
+if [ $? -ne 0 ];then
+    error_exit 4
+    fi
+
+echo BUNDLE_IDENTIFIER $BUNDLE_IDENTIFIER
+echo KEYCHAIN_IDENTIFIER $KEYCHAIN_IDENTIFIER
+
+rm -rf "$CODE_SIGNATURE_FOLDER" || error_exit 5
+
+cp "$PROVISION_PROFILE" "$NEW_PROVISION_PROFILE" || error_exit 6 
+
+/usr/libexec/PlistBuddy -c "set ApplicationProperties:SigningIdentity \"$CERTIFICATE_NAME\"" "$ARCHIVE_FOLDER/Info.plist" || error_exit 7
+/usr/libexec/PlistBuddy -c "set application-identifier \"$BUNDLE_IDENTIFIER\"" "$XCENT" || error_exit 8
+/usr/libexec/PlistBuddy -c "set keychain-access-groups:0 \"$BUNDLE_IDENTIFIER\"" "$XCENT" || error_exit 9
+
+codesign --force -s "$SIGNATURE" --resource-rules="$RESOURCES_PLIST" --entitlements "$XCENT" "$APP_FOLDER" || error_exit 10
+codesign -v "$APP_FOLDER" || error_exit 11
+codesign -d --entitlements - "$APP_FOLDER" || error_exit 12
+clean_up
