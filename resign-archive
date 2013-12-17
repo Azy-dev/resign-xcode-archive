@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-
-
 ARCHIVE_FOLDER=$1
 echo ARCHIVE_FOLDER $ARCHIVE_FOLDER
 
@@ -37,10 +35,9 @@ trap clean_up SIGHUP SIGINT SIGTERM
 
 APP_FOLDER=$(find "$ARCHIVE_FOLDER" -iname "*.app")
 if [ $? -ne 0 ];then
-
+    echo APP_FOLDER $APP_FOLDER
     error_exit 1 
 fi
-
 
 NEW_PROVISION_PROFILE="$APP_FOLDER/embedded.mobileprovision"
 XCENT="$APP_FOLDER/archived-expanded-entitlements.xcent"
@@ -48,11 +45,10 @@ CODE_SIGNATURE_FOLDER="$APP_FOLDER/_CodeSignature"
 RESOURCES_PLIST="$APP_FOLDER/ResourceRules.plist"
 
 PROFILE_GREP=$(grep -a -A1 'application-identifier' "$PROVISION_PROFILE")
-echo PROFILE_GREP "$PROFILE_GREP"
 if [ $? -ne 0 ];then
+    echo PROFILE_GREP "$PROFILE_GREP"
     error_exit 2
  fi
-
 
 BUNDLE_IDENTIFIER=$(ruby -e "puts /<string>(.*)<\/string>/.match(\"$PROFILE_GREP)\")[1]") 
 if [ $? -ne 0 ];then
@@ -60,13 +56,11 @@ if [ $? -ne 0 ];then
     error_exit 3
 fi
 
-
 KEYCHAIN_IDENTIFIER="$(echo $BUNDLE_IDENTIFIER | cut -d '.' -f1)"
 if [ $? -ne 0 ];then
     echo KEYCHAIN_IDENTIFIER $KEYCHAIN_IDENTIFIER
     error_exit 4
 fi
-
 
 rm -rf "$CODE_SIGNATURE_FOLDER" || error_exit 5
 
